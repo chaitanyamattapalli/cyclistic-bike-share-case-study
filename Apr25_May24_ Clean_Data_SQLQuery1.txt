@@ -1,0 +1,105 @@
+CREATE DATABASE Casestudy;
+
+USE Casestudy;
+
+CREATE TABLE trips_raw (
+    ride_id NVARCHAR(50),
+    rideable_type NVARCHAR(50),
+    started_at DATETIME,
+    ended_at DATETIME,
+    start_station_name NVARCHAR(255) NULL,
+    start_station_id NVARCHAR(50) NULL,
+    end_station_name NVARCHAR(255) NULL,
+    end_station_id NVARCHAR(50) NULL,
+    start_lat FLOAT NULL,
+    start_lng FLOAT NULL,
+    end_lat FLOAT NULL,
+    end_lng FLOAT NULL,
+    member_casual NVARCHAR(50)
+);
+
+BULK INSERT trips_raw
+FROM 'D:\\Cyclistic_Case_Study\\Data_Raw\\May-24-divvy-tripdata.csv'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    FORMAT = 'CSV',
+    TABLOCK
+);
+
+SELECT COUNT(*) FROM trips_raw;
+
+/* Filter out any rows with negative ride times
+Create new fields: ride_length, day_of_week, and month */
+
+SELECT
+    ride_id,
+    rideable_type,
+    started_at,
+    ended_at,
+    start_station_name,
+    start_station_id,
+    end_station_name,
+    end_station_id,
+    start_lat,
+    start_lng,
+    end_lat,
+    end_lng,
+    member_casual,
+    DATEDIFF(SECOND, started_at, ended_at) AS ride_length,
+    DATENAME(WEEKDAY, started_at) AS day_of_week,
+    FORMAT(started_at, 'yyyy-MM') AS ride_month
+INTO trips_clean
+FROM trips_raw
+WHERE
+    DATEDIFF(SECOND, started_at, ended_at) > 0
+    AND member_casual IN ('member', 'casual');
+
+/* Average Ride Length by User Type */
+
+SELECT 
+    member_casual,
+    AVG(ride_length) / 60.0 AS avg_ride_length_minutes
+FROM trips_clean
+GROUP BY member_casual;
+
+/* Updated query to explicitly cast ride_length to a higher-precision type like FLOAT before averaging.
+Because of error with the previous query*/
+
+SELECT 
+    member_casual,
+    AVG(CAST(ride_length AS FLOAT)) / 60.0 AS avg_ride_length_minutes
+FROM trips_clean
+GROUP BY member_casual;
+
+/* Ride Volume by Day of Week and User Type */
+
+SELECT 
+    day_of_week,
+    member_casual,
+    COUNT(*) AS ride_count
+FROM trips_clean
+GROUP BY day_of_week, member_casual
+ORDER BY 
+    CASE 
+        WHEN day_of_week = 'Sunday' THEN 1
+        WHEN day_of_week = 'Monday' THEN 2
+        WHEN day_of_week = 'Tuesday' THEN 3
+        WHEN day_of_week = 'Wednesday' THEN 4
+        WHEN day_of_week = 'Thursday' THEN 5
+        WHEN day_of_week = 'Friday' THEN 6
+        WHEN day_of_week = 'Saturday' THEN 7
+    END;
+
+/* Monthly Ride Trends */
+
+SELECT 
+    ride_month,
+    member_casual,
+    COUNT(*) AS ride_count
+FROM trips_clean
+GROUP BY ride_month, member_casual
+ORDER BY ride_month;
+
+SELECT * FROM trips_clean;
